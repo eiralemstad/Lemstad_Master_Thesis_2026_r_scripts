@@ -7,6 +7,7 @@ library(gtExtras)
 library(tibble)
 library(moments)
 library(modelsummary)
+library(psych)
 
 tbl_reg_data <- read.csv("DATA/reg_ssb.csv")
 
@@ -18,10 +19,8 @@ str(tbl_reg_data)
 
 #Modelsummary#-----
 var_pol <- c("diversity", "attitude_change", "threats", "social_difference", "climate",
-             "S5Q5r17","educationLevel", "household_income", "age", #"Life_Satisfaction",
-             #"Health", 
-             "Support_neig", "Belonging_neig", "SocialR_neig", 
-             #"Distrust", "Yrs_in_Neig", 
+             "S5Q5r17","educationLevel", "household_income", "age", 
+             "Support_neig", "Belonging_neig", "SocialR_neig",
              "Centrality")
 
 plot_hist <- tbl_reg_data %>%
@@ -41,11 +40,9 @@ labels_tbl  <-  c(
   "household_income" = "Income",
   "age" = "Age",
   "gender" = "Gender",
-  #"Life_Satisfaction" = "Life satisfaction",
   "Support_neig" = "Neighbourhood support",
   "Belonging_neig" ="Neighbourhood belonging",
   "SocialR_neig" = "Social relations neighbourhood"
-  #"Yrs_in_Neig"= "Years in neighbourhood"
   )
 
 #MeanSD <- function(x) {sprintf("%.2f (%.2f)", mean(x), sd(x))}
@@ -122,39 +119,12 @@ box_supp <- boxplot(tbl_reg_data$Support_neig)
 box_bel <- boxplot(tbl_reg_data$Belonging_neig)
 box_SocR <- boxplot(tbl_reg_data$SocialR_neig)
 
-#TEST -----
-# tmp <- datasummary(
-#   diversity + attitude_change + threats+
-#     social_difference + climate+
-#     educationLevel + household_income + age + gender +
-#     Life_Satisfaction + Health +
-#     Support_neig + Belonging_neig + SocialR_neig +
-#     Distrust + Yrs_in_Neig + Centrality
-#   ~
-#     N + Mean + SD + Min + Max,
-#   data = tbl_reg_data,
-#   output = "data.frame"
-# )
-# 
-# names(tmp)
-# rownames(tmp)
-# View(tmp)
-# 
-# tbl_skim <- datasummary_skim(diversity + attitude_change + threats+
-#                    social_difference + climate+
-#                    educationLevel + household_income + age + gender +
-#                    Life_Satisfaction + Health +
-#                    Support_neig + Belonging_neig + SocialR_neig +
-#                    Distrust + Yrs_in_Neig + Centrality, data = tbl_reg_data)
 #######
 dep_pol_var <- tbl_reg_data %>% 
   select(c(diversity, attitude_change, threats, social_difference, climate, S5Q5r17))
 view(dep_pol_var)
 
 #####
-library(psych)
-
-#Cor(dep_pol_var)
 cor_pol <- lowerCor(dep_pol_var)
 
 corTbl <- round(cor_pol, 2)
@@ -201,7 +171,7 @@ gtsave(gt_cor_pol, filename = "PLOTS/Corr_Matrix_Pol.png",
        )
 
 
-### TEST MED SIGNIFIKANS #######
+### TEST MED SIGNIFIKANS (AI) #######
 
 cor_test <- corr.test(dep_pol_var, method = "spearman")
 
