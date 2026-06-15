@@ -11,7 +11,7 @@ library(patchwork)
 library(cowplot)
 
 #Må kjøre for at koden til Oslo og Bergen skal fungere
-data_hele <- read.csv("/Users/eiraheleneberglemstad/R_Projects/Master/all_factors_results_uS.csv")
+data_hele <- read.csv("/…/all_factors_results_uS.csv")
 
 data_hele$zipcode <- as.character(data_hele$zipcode)
 data_hele <- data_hele %>% 
@@ -21,14 +21,14 @@ data_hele <- data_hele %>%
   mutate(kommune = str_pad(str_replace_all(kommune, "\\s", ""), width = 4,
                            side = "left", pad = "0"))
 
-imputation <- read.csv("/Users/eiraheleneberglemstad/R_Projects/Master/data_imputated.csv")
+imputation <- read.csv("/…/data_imputated.csv")
 imputation <- imputation %>%
   select(record, S5Q5r17)
 
 data_hele <- data_hele %>% 
   left_join(imputation, by = "record")
 
-norge_geoJSON <- st_read("/Users/eiraheleneberglemstad/R_Projects/Master/GeoJSON_postnummer/Basisdata_0000_Norge_25833_Postnummeromrader_GeoJSON.geojson",
+norge_geoJSON <- st_read("/…/GeoJSON_postnummer/Basisdata_0000_Norge_25833_Postnummeromrader_GeoJSON.geojson",
                          layer = "postnummeromrader.postnummeromrade")
 
 norge_geoJSON <- norge_geoJSON %>% 
@@ -36,7 +36,7 @@ norge_geoJSON <- norge_geoJSON %>%
 
 
 #Fjerne duplikater i hele datasettet (Norge). Det er 69 duplikater der geodata overlapper
-summary(norge_geoJSON$postnummer[duplicated(norge_geoJSON$postnummer)]) # ikke strengt nødvendig
+summary(norge_geoJSON$postnummer[duplicated(norge_geoJSON$postnummer)]) 
 
 NOR_geo_valid <- st_make_valid(norge_geoJSON) 
 NOR_geo_uDup <- NOR_geo_valid %>% 
@@ -50,7 +50,7 @@ NOR_geo_uDup <- NOR_geo_valid %>%
 ###### NORGE #####
 #Lastet ned GeoJSON fil fra GeoNorge med postnummer for hele landet. Dataens opphav: Posten/Kartverket
 
-# 3 Left join av geodata og spørreundersøkelse
+# Left join av geodata og spørreundersøkelse
 data_norge <- NOR_geo_uDup %>%
   left_join(data_hele, by = c("postnummer","kommune"))
 
@@ -75,7 +75,7 @@ data_norge_uNA <- data_norge %>%
     .groups = "drop")
 
 sum(data_norge_uNA$n_svar<= 3)
-# Slå sammen postnummer i hele landet #####
+# Merging postcode sectors for all study areas #####
 
 norge_større_postnr <- data_norge %>% 
   mutate(postnummer = case_when(
@@ -319,8 +319,6 @@ norge_større_postnr <- data_norge %>%
     
     TRUE ~ postnummer))
 
-#class(norge_større_postnr)
-
 #####
 norge_større_postnr <- norge_større_postnr %>%
   group_by(postnummer) %>%
@@ -345,8 +343,8 @@ norge_postnr_grupper_uNA <- norge_større_postnr %>%
 
 
 # SSB ------
-SSB <- read.csv("/Users/eiraheleneberglemstad/R_Projects/Master/DATA/sentralitetsindeks_2023-2024_kommuner.csv", sep = ";")
-#Endre knr.2024 til character? --> sette en null foran alle 301 --> slå sammen datasett med felles kommune
+SSB <- read.csv("/…/sentralitetsindeks_2023-2024_kommuner.csv", sep = ";")
+
 SSB <- SSB %>%
   rename(c("kommune" = "knr.2024", "kommune_navn" = "Kommune.2024"))
 SSB$kommune <- as.character(SSB$kommune)
@@ -356,17 +354,6 @@ SSB$kommune[SSB$kommune == "301"] <- "0301"
 
 data_norge_SSB <- SSB %>%
   left_join(norge_større_postnr, by = "kommune")
-
-#View(data_norge_SSB)
-
-# class(data_norge_SSB)
-# data_norge_SSB <- st_as_sf(data_norge_SSB)
-#st_geometry(data_norge_SSB)
-
-
-#Lag tabell over før og etter sammenslåing ####
-# sum(norge_postnr_grupper_uNA$n_svar == 1) 
-# sum(norge_postnr_grupper_uNA$n_svar == 2)
 
 tbl_merged <- flextable(data.frame(
     Value = c("postcode sectors with 1 respondent", 
@@ -380,7 +367,7 @@ tbl_merged <- flextable(data.frame(
                        sum(norge_postnr_grupper_uNA$n_svar == 2),
                        sum(norge_postnr_grupper_uNA$n_svar == 3)))) %>% 
   theme_booktabs() %>%           
-  autofit() %>%                  # Tilpass kolonnebredde
+  autofit() %>%                  
   set_caption("Results Before and After the Merging of Postcode Sectors") %>% 
   add_footer_lines("Note: Total postcode sectors reduced from 551 to 299") %>% 
   fontsize(size = 10, part = "all")
@@ -388,34 +375,9 @@ tbl_merged <- flextable(data.frame(
 tbl_merged
 #print(tbl_merged, preview = "docx")
 
-
-# MORAN kontinuerlige tall ####
-NORk_neig_uNA <- spdep::poly2nb( # 1.ordens naboliste
-  norge_postnr_grupper_uNA,
-  row.names = norge_postnr_grupper_uNA$postnummer,
-  queen = T)
-
-summary(NORk_neig_uNA)
-# Liste kun 1.ordens
-NORk_listw_uNA <- spdep::nb2listw(NORk_neig_uNA, style = "W", zero.policy = T)
-
-NOR_2.ord <- spdep::nblag(neighbours = NORk_neig_uNA, maxlag = 2) #2. ordens naboliste
-
-NOR_1_2.ord <- spdep::nblag_cumul(NOR_2.ord) # slår sammen 1. and 2. ordens nabolister
-NOR_list_weig_1_2 <- nb2listw(NOR_1_2.ord, style = "W", zero.policy = T)
-# 
-# summary(NORk_neig_uNA)
-# summary(NOR_1_2.ord)
-# attr(NOR_1_2.ord, "region.id")
-# NOR_1_2.ord
-
-# NOR_coo_cent <- st_centroid(norge_postnr_grupper_uNA)
-# inside_cent <- st_within(NOR_coo_cent, norge_postnr_grupper_uNA, sparse = F)
-# inside_cent
-# sum(!inside_cent)
 ### KNN ####
 NOR_coo <- st_coordinates(st_point_on_surface(norge_postnr_grupper_uNA))
-NOR_kNN_3 <- knn2nb(knearneigh(NOR_coo, k = 3))
+
 NOR_kNN_4 <- knn2nb(knearneigh(NOR_coo, k = 4)) # k number nearest neighbors k=4 6 grupper
 comp4 <-  n.comp.nb (NOR_kNN_4)
 comp4$nc
@@ -427,31 +389,9 @@ norge_postnr_grupper_uNA$comp.id <- comp$comp.id
 split(norge_postnr_grupper_uNA$postnummer,
       norge_postnr_grupper_uNA$comp.id)
 
-# norge_postnr_grupper_uNA %>%
-#   group_by(comp.id) %>%
-#   summarise(postnummer = list(postnummer),
-#             n = n())
-
-
 plot(st_geometry(norge_postnr_grupper_uNA),
      col = norge_postnr_grupper_uNA$comp4,
      border = "grey", lwd = 0.005)
-
-NOR_kNN_5 <- knn2nb(knearneigh(NOR_coo, k = 5)) # k number nearest neighbors k=5 5 grupper
-comp5 <-  n.comp.nb (NOR_kNN_5)
-#comp5$nc
-#comp5$comp.id
-norge_postnr_grupper_uNA$comp5 <- factor(comp5$comp.id)
-
-comp <- n.comp.nb(NOR_kNN_5)
-norge_postnr_grupper_uNA$comp.id <- comp$comp.id
-split(norge_postnr_grupper_uNA$postnummer,
-      norge_postnr_grupper_uNA$comp.id)
-plot(st_geometry(norge_postnr_grupper_uNA),
-     col = norge_postnr_grupper_uNA$comp5,
-     border = "grey", lwd = 0.005)
-
-NOR_kNN_8 <- knn2nb(knearneigh(NOR_coo, k = 8)) # k number nearest neighbors k=8 kun 2 grupper
 
 plot(st_geometry(norge_postnr_grupper_uNA), border = "lightgray")
 plot.nb(NOR_kNN_5, st_geometry(norge_postnr_grupper_uNA), add = TRUE)
@@ -459,22 +399,6 @@ NOR_kNN_list <- nb2listw(NOR_kNN_4, style = "W")
 #
 set.seed(500)
 ### Moran test mean attitude towards immigrant diversity ### ----
-# NOR_gmoran_div <- spdep::moran.test(norge_postnr_grupper_uNA$mean_diversity, NORk_listw_uNA, zero.policy = T)
-# NOR_gmoran_div
-# NOR_gmoran_div[["statistic"]] # z-score
-# # Moran scatterplot
-# moran.plot(norge_postnr_grupper_uNA$mean_diversity, NORk_listw_uNA) #data og nabolagsliste som ble brukt i tilhørende moran.test
-# 
-# spdep::moran.test(norge_postnr_grupper_uNA$mean_diversity, NOR_list_weig_1_2, zero.policy = T)
-# moran.plot(norge_postnr_grupper_uNA$mean_diversity, NOR_list_weig_1_2) #data og nabolagsliste som ble brukt i tilhørende moran.test
-# 
-# spdep::moran.mc(norge_postnr_grupper_uNA$mean_diversity, NOR_list_weig_1_2, 
-#                 nsim = 999, alternative = "greater")
-# 
-# moran.plot(norge_postnr_grupper_uNA$mean_diversity, NOR_list_weig_1_2) #data og nabolagsliste som ble brukt i tilhørende moran.test
-
-spdep::moran.test(norge_postnr_grupper_uNA$mean_diversity, NOR_kNN_list, zero.policy = T)
-moran.plot(norge_postnr_grupper_uNA$mean_diversity, NOR_kNN_list) #data og nabolagsliste som ble brukt i tilhørende moran.test
 
 MC_div <- moran.mc(norge_postnr_grupper_uNA$mean_diversity, NOR_kNN_list, 
                    nsim = 999, alternative = "greater")
@@ -483,18 +407,7 @@ mean(MC_div$res)
 hist(MC_div$res)
 abline(v = MC_div$statistic, col = "red")
 
-
-
 ### Moran test mean attitude change in migration questions ####
-
-# spdep::moran.test(norge_postnr_grupper_uNA$mean_attitude_change, NORk_listw_uNA, zero.policy = T)
-# moran.plot(norge_postnr_grupper_uNA$mean_attitude_change, NORk_listw_uNA) #data og nabolagsliste som ble brukt i tilhørende moran.test
-# 
-# spdep::moran.test(norge_postnr_grupper_uNA$mean_attitude_change, NOR_list_weig_1_2, zero.policy = T)
-# moran.plot(norge_postnr_grupper_uNA$mean_attitude_change, NOR_list_weig_1_2) #data og nabolagsliste som ble brukt i tilhørende moran.test
-
-spdep::moran.test(norge_postnr_grupper_uNA$mean_attitude_change, NOR_kNN_list, zero.policy = T)
-moran.plot(norge_postnr_grupper_uNA$mean_attitude_change, NOR_kNN_list) #data og nabolagsliste som ble brukt i tilhørende moran.test
 
 MC_att <- moran.mc(norge_postnr_grupper_uNA$mean_attitude_change, NOR_kNN_list, 
                    nsim = 999, alternative = "greater")
@@ -503,17 +416,7 @@ mean(MC_att$res)
 hist(MC_att$res)
 abline(v = MC_att$statistic, col = "red")
 
-
 ### Moran test mean threats ####
-
-# spdep::moran.test(norge_postnr_grupper_uNA$mean_threats, NORk_listw_uNA, zero.policy = T)
-# moran.plot(norge_postnr_grupper_uNA$mean_threats, NORk_listw_uNA) #data og nabolagsliste som ble brukt i tilhørende moran.test
-# 
-# spdep::moran.test(norge_postnr_grupper_uNA$mean_threats, NOR_list_weig_1_2, zero.policy = T)
-# moran.plot(norge_postnr_grupper_uNA$mean_threats, NOR_list_weig_1_2) #data og nabolagsliste som ble brukt i tilhørende moran.test
-
-spdep::moran.test(norge_postnr_grupper_uNA$mean_threats, NOR_kNN_list, zero.policy = T)
-moran.plot(norge_postnr_grupper_uNA$mean_threats, NOR_kNN_list) #data og nabolagsliste som ble brukt i tilhørende moran.test
 
 MC_thr <- moran.mc(norge_postnr_grupper_uNA$mean_threats, NOR_kNN_list, 
                    nsim = 999, alternative = "greater")
@@ -524,13 +427,6 @@ abline(v = MC_thr$statistic, col = "red")
 
 ### Moran test mean attitudes towards social difference ####
 
-# spdep::moran.test(norge_postnr_grupper_uNA$mean_social_difference, NORk_listw_uNA, zero.policy = T)
-# spdep::moran.test(norge_postnr_grupper_uNA$mean_social_difference, NOR_list_weig_1_2, zero.policy = T)
-# moran.plot(norge_postnr_grupper_uNA$mean_social_difference, NORk_listw_uNA) #data og nabolagsliste som ble brukt i tilhørende moran.test
-
-spdep::moran.test(norge_postnr_grupper_uNA$mean_social_difference, NOR_kNN_list, zero.policy = T)
-moran.plot(norge_postnr_grupper_uNA$mean_social_difference, NOR_kNN_list) #data og nabolagsliste som ble brukt i tilhørende moran.test
-
 MC_sDiff <- moran.mc(norge_postnr_grupper_uNA$mean_social_difference, NOR_kNN_list, 
                    nsim = 999, alternative = "greater")
 MC_sDiff
@@ -539,15 +435,6 @@ hist(MC_sDiff$res)
 abline(v = MC_sDiff$statistic, col = "red")
 
 ### Moran test mean attitude in questions about climate change ####
-
-# spdep::moran.test(norge_postnr_grupper_uNA$mean_climate, NORk_listw_uNA, zero.policy = T)
-# moran.plot(norge_postnr_grupper_uNA$mean_climate, NORk_listw_uNA) #data og nabolagsliste som ble brukt i tilhørende moran.test
-# 
-# spdep::moran.test(norge_postnr_grupper_uNA$mean_climate, NOR_list_weig_1_2, zero.policy = T)
-# moran.plot(norge_postnr_grupper_uNA$mean_climate, NOR_list_weig_1_2) #data og nabolagsliste som ble brukt i tilhørende moran.test
-
-spdep::moran.test(norge_postnr_grupper_uNA$mean_climate, NOR_kNN_list, zero.policy = T)
-moran.plot(norge_postnr_grupper_uNA$mean_climate, NOR_kNN_list) #data og nabolagsliste som ble brukt i tilhørende moran.test
 
 MC_cli <- moran.mc(norge_postnr_grupper_uNA$mean_climate, NOR_kNN_list, 
                      nsim = 999, alternative = "greater")
@@ -565,8 +452,6 @@ hist(MC_cent$res)
 abline(v = MC_cent$statistic, col = "red")
 
 #Presentere resultater for global Moran's I ####
-# Monte Carlo hovedfunn!
-# Data i tabell vanlig morans I 
 Monte_C_tbl <- tibble(
   Factor = c("Mean ethnic diversity", "Mean Attitude Change", 
              "Mean Threats", "Mean Social Difference", 
@@ -578,90 +463,22 @@ Monte_C_tbl <- tibble(
         "kNN",
         "kNN",
         "kNN"),
-  Moran_I_MC = c(0.040, 0.012, -0.036, 0.104, 0.108, 0.323),
-  E_I = c(-0.0039, -0.0038, -0.0037, -0.0038, -0.0031, -0.0021),
+  Moran_I_MC = c(0.040, 0.012, -0.018, 0.128, 0.154, 0.307),
+  E_I = c(-0.0038, -0.0034, -0.0023, -0.0028, -0.0028, -0.0006),
   nsim = c(999, 999, 999, 999, 999, 999),
-  p_value = c("0.05", "0.262", "0.888", "0.001", "0.001", "0.001"))
-# ,
-#   sub_graphs = c(2,2,2,2,2))
+  p_value = c("0.115", "0.311", "0.666", "0.001", "0.002", "0.001"))
 
 Monte_C_tbl <- flextable(Monte_C_tbl) %>% 
-  #colformat_num(j = c("Moran_I_MC", "E_I", "z"), digits = 3) %>% 
-  theme_booktabs() %>%           # Pen akademisk stil
-  autofit() %>%                  # Tilpass kolonnebredde
+  theme_booktabs() %>%           
+  autofit() %>%                  
   set_caption("Polarisation Factors: Global Moran’s I Monte Carlo Method") %>% 
   add_footer_lines(
-    "Note: Calculated with Moran's I (moran.mc), alternative = greater.\nk = 8 and sub-graphs = 2."
+    "Note: Calculated with Moran's I (moran.mc), alternative = greater.\nk = 4 and sub-graphs = 6."
   ) %>% 
   fontsize(size = 10, part = "all") 
 
 Monte_C_tbl
-save_as_docx(Monte_C_tbl, path = "/Users/eiraheleneberglemstad/R_Projects/Master/PLOTS/table_Monte_carlo_GMoran_pol_NOR.docx")
-
-#### Monte Carlo k = 5 #####
-Monte_C_tbl_5 <- tibble(
-  Factor = c("Mean ethnic diversity", "Mean Attitude Change", 
-             "Mean Threats", "Mean Social Difference", 
-             "Mean Climate Change", "Mean Centralisation"),
-  N = c(299, 299, 299, 299, 299, 299),
-  W = c("kNN",
-        "kNN",
-        "kNN",
-        "kNN",
-        "kNN",
-        "kNN"),
-  Moran_I_MC = c(0.033, 0.023, -0.039, 0.120, 0.124, 0.315),
-  E_I = c(-0.0037, -0.0036, -0.0028, -0.0036, -0.0028, -0.0014),
-  nsim = c(999, 999, 999, 999, 999, 999),
-  p_value = c("0.132", "0.207", "0.847", "0.001", "0.002", "0.001"))
-# ,
-#   sub_graphs = c(2,2,2,2,2))
-
-Monte_C_tbl_5 <- flextable(Monte_C_tbl_5) %>% 
-  #colformat_num(j = c("Moran_I_MC", "E_I", "z"), digits = 3) %>% 
-  theme_booktabs() %>%           
-  autofit() %>%                  # Kolonnebredde
-  set_caption("Polarisation Factors: Global Moran’s I Monte Carlo Method") %>% 
-  add_footer_lines(
-    "Note: Calculated with Moran's I (moran.mc), alternative = greater.\nk = 5 and sub-graphs = 5."
-  ) %>% 
-  fontsize(size = 10, part = "all") 
-
-Monte_C_tbl_5
-save_as_docx(Monte_C_tbl_5, path = "/Users/eiraheleneberglemstad/R_Projects/Master/PLOTS/table_Monte_carlo_GMoran_pol_NOR_5.docx")
-
-
-
-# Data i tabell vanlig morans I 
-gmoran_tbl <- tibble(
-  Factor = c("mean att. immigrant diversity", "mean att. change in migration questions", 
-             "mean att. immigrants as threats", "mean att. social difference", "mean att. climate change"),
-  N = c(300, 300, 300, 300, 300),
-  W = c("k nearest neighbours",
-        "k nearest neighbours",
-        "k nearest neighbours",
-        "k nearest neighbours",
-        "k nearest neighbours"),
-  Moran_I = c(0.040, 0.012, -0.036, 0.104, 0.108),
-  E_I = c(-0.0034, -0.0034, -0.0034, -0.0034, -0.0034),
-  z = c(1.66, 0.60, -1.27, 4.15, 4.29),
-  p = c("0.048", "0.275", "0.898", "<0.001", "<0.001"))
-  # ,
-  # sub_graphs = c(43,43,43,43,43))
-
-gmoran_tbl_ft <- flextable(gmoran_tbl) %>% 
-  colformat_num(j = c("Moran_I", "E_I", "z"), digits = 3) %>% 
-  theme_booktabs() %>%           # Pen akademisk stil
-  autofit() %>%                  # Tilpass kolonnebredde
-  set_caption("Polarisation Factors Global Moran’s I") %>% 
-  add_footer_lines(
-    "Note: Calculated with Moran's I (moran.test), alternative = greater.\nSub-graphs = 2"
-  ) %>% 
-  fontsize(size = 10, part = "all") 
-
-gmoran_tbl_ft
-save_as_docx(gmoran_tbl_ft, path = "/Users/eiraheleneberglemstad/R_Projects/Master/PLOTS/table_GMoran_pol_NOR_ny_ver.docx")
-
+save_as_docx(Monte_C_tbl, path = "/…/table_Monte_carlo_GMoran_pol_NOR.docx")
 
 ## Norge desiler ####
 
@@ -681,14 +498,10 @@ norge_desil <- data_norge_decile %>%
   mutate(decile_climate = factor(decile_climate, levels = 1:10, ordered = T)) %>% 
   mutate(decile_centr = factor(decile_centr, levels = 1:10, ordered = T))
 
-# class(norge_desil$decile_diversity)
-# class(norge_desil$decile_threats)
+
 norge_desil_uNA <- norge_desil %>% 
   na.omit()
 class(norge_desil)
-
-#write_sf(norge_desil, "/Users/eiraheleneberglemstad/R_Projects/Master/DATA/SSB_norge_desil.gpkg")
-
 
 ###### OSLO ######
 
@@ -698,9 +511,9 @@ oslo_geodata <- NOR_geo_uDup %>%
 data_oslo <- data_hele %>% 
   filter(kommune== "0301") 
 
-# 3) Left join mellom geodata og faktorer
+# Left join mellom geodata og faktorer
 oslo_sum <- oslo_geodata %>%
-  left_join(data_oslo, by = c("postnummer", "kommune")) # nå uten duplikater, fjernet i Norge seksjonen
+  left_join(data_oslo, by = c("postnummer", "kommune")) #  uten duplikater, fjernet i Norge seksjonen
 # plot oslo City area ----
 oslo_sum_plot <- oslo_sum
 class(oslo_sum_plot$City_area)
@@ -732,7 +545,7 @@ osl_city_areas <- ggplot(oslo_sum_plot) +
   scale_y_continuous(n.breaks = 5)
 
 osl_city_areas
-#ggsave(osl_city_areas, file = "/Users/eiraheleneberglemstad/R_Projects/Master/PLOTS/Map_Oslo/osl_city_parts.png", dpi = 500)
+#ggsave(osl_city_areas, file = "…/PLOTS/Map_Oslo/osl_city_parts.png", dpi = 500)
 
 
 ### SLÅ SAMMEN POSTNUMMER MANUELT for Oslo, likt som i Norge seksjon ######
@@ -820,14 +633,13 @@ map_oslo_div <- ggplot(norge_desil) +
 map_oslo_div 
 
 map_oslo_div <- map_oslo_div +
-  #plot_layout(guides = "collect", ncol = 3) +
   plot_annotation(title = "Attitudes Towards Ethnic Diversity, Oslo",
-                  #subtitle = "Light Colours - Immigration Friendly Att | Dark Colours - Immigration Hostile Att",
                   theme = theme(plot.title = element_text(hjust = 0.5, size = 12),
                                 plot.caption = element_text(hjust = 0)),
                   caption = "Source: GeoNorge")
 map_oslo_div
 ggsave(map_oslo_div, file = "PLOTS/map_oslo_div.png", dpi = 500)
+
 # Map - attitude change among people around you in immigration questions the last 5 years #####
 
 map_oslo_att_change <- ggplot(norge_desil) +
@@ -848,9 +660,7 @@ map_oslo_att_change <- ggplot(norge_desil) +
 map_oslo_att_change
 
 map_oslo_att_change <- map_oslo_att_change +
-  #plot_layout(guides = "collect", ncol = 3) +
   plot_annotation(title = "Attitude Change Towards Immigrants, Oslo",
-                  #subtitle = "Light Colours - Immigration Friendly Att | Dark Colours - Immigration Hostile Att",
                   theme = theme(plot.title = element_text(hjust = 0.5, size = 12),
                                 plot.caption = element_text(hjust = 0)),
                   caption = "Source: GeoNorge")
@@ -877,9 +687,7 @@ map_oslo_threats <- ggplot(norge_desil) +
 map_oslo_threats
 
 map_oslo_threats <- map_oslo_threats +
-  #plot_layout(guides = "collect", ncol = 3) +
   plot_annotation(title = "Immigrants as a Threat to Norwegian Society, Oslo",
-                  #subtitle = "Light Colours - Immigration Friendly Att | Dark Colours - Immigration Hostile Att",
                   theme = theme(plot.title = element_text(hjust = 0.5),
                                 plot.caption = element_text(hjust = 0)),
                   caption = "Source: GeoNorge")
@@ -903,7 +711,6 @@ map_oslo_sDiff <- ggplot(norge_desil) +
             ylim = c(6645956.6, 6659321.8))
 
 map_oslo_sDiff <- map_oslo_sDiff +
-  #plot_layout(guides = "collect", ncol = 3) +
   plot_annotation(title = "Attitudes Towards Social Difference, Oslo",
                   #subtitle = "Light Colours - Immigration Friendly Att | Dark Colours - Immigration Hostile Att",
                   theme = theme(plot.title = element_text(hjust = 0.5),
@@ -930,7 +737,6 @@ map_oslo_climate <- ggplot(norge_desil) +
             ylim = c(6645956.6, 6659321.8))
 
 map_oslo_climate <- map_oslo_climate +
-  #plot_layout(guides = "collect", ncol = 3) +
   plot_annotation(title = "Attitudes Towards Climate Change, Oslo",
                   #subtitle = "Light Colours - Immigration Friendly Att | Dark Colours - Immigration Hostile Att",
                   theme = theme(plot.title = element_text(hjust = 0.5),
@@ -938,10 +744,9 @@ map_oslo_climate <- map_oslo_climate +
                   caption = "Source: GeoNorge")
 map_oslo_climate
 ggsave(map_oslo_climate, file = "PLOTS/map_oslo_climate.png", dpi = 500)
-#
 
 
-### Oslo desiler BRUKES MASSE #######
+### Oslo desiler ####
 
 oslo_decile <- oslo_sum %>%
   mutate(decile_diversity = ntile(mean_diversity, 10),
@@ -962,25 +767,21 @@ oslo_decile_uNA <- oslo_decile %>%
 st_bbox(oslo_decile_uNA)
 
 ## Oslo Nabolagsvekter IDW ####
-#coords_osl <- st_coordinates(st_centroid(oslo_decile))
+
 coords_osl <- st_coordinates(st_point_on_surface(oslo_decile))
-#coords_osl_sub <- st_coordinates(st_point_on_surface(oslo_decile_uNA))
 
 #Inverted distance weights
-# dist_osl_list <- nbdists(neig_dist, coords_osl)
-
 keep_oslo <- !is.na(oslo_decile$mean_diversity) # NA is the same for all the factors
 oslo_sub_dist <- oslo_decile[keep_oslo, ]
-
 coords_osl_sub <- coords_osl[keep_oslo, ]
 
-#Naboer basert på avstand:
+#Neighbours based on distance:
 nb_sub_oslo_dist <- dnearneigh(coords_osl_sub, d1 = 0, d2 = 2500)
 n.comp.nb(nb_sub_oslo_dist)
 table(n.comp.nb(nb_sub_oslo_dist)$comp.id)
 dlist_sub <- nbdists(nb_sub_oslo_dist, coords_osl_sub)
 
-# IDW vekter
+# IDW weights
 lw_idw_sub <- nb2listw(nb_sub_oslo_dist,
                    glist = lapply(dlist_sub, function(x)1/(x^2)),
                    style = "W",
@@ -992,25 +793,7 @@ plot.nb(nb_sub_oslo_dist, coords_osl_sub, add = T, col = "red")
 summary(unlist(dlist_sub))
 any(unlist(dlist_sub) == 0)
 
-
-## Nabolagsvekter med polygoner uten innhold ##
-
-# nb_oslo_dist <- dnearneigh(coords_osl, d1 = 0, d2 = 2100)
-# dlist <- nbdists(nb_oslo_dist, coords_osl)
-# 
-# # IDW vekter
-# lw_idw_sub <- nb2listw(nb_oslo_dist,
-#                        glist = lapply(dlist, function(x)1/x),
-#                        style = "W",
-#                        zero.policy = T)
-# 
-# plot(st_geometry(oslo_decile), border = "lightgrey")
-# plot.nb(nb_oslo_dist, coords_osl, add = T, col = "red")
-# localG_perm(x, listw, nsim=499, zero.policy=attr(listw, "zero.policy"), spChk=NULL,
-#             alternative = "two.sided", iseed=NULL, fix_i_in_Gstar_permutations=TRUE,
-#             no_repeat_in_row=FALSE)
-
-# Lokal Gi IDW
+# Local Gi IDW
 oslo_decile_uNA$gi_div_z <- as.numeric(localG_perm(oslo_decile_uNA$mean_diversity, lw_idw_sub, nsim=499, zero.policy = TRUE))
 oslo_decile_uNA$gi_div_z
 
@@ -1026,36 +809,6 @@ oslo_decile_uNA$gi_sDiff_z
 oslo_decile_uNA$gi_cli_z <- as.numeric(localG_perm(oslo_decile_uNA$mean_climate, lw_idw_sub, nsim=499, zero.policy = TRUE))
 oslo_decile_uNA$gi_cli_z
 
-## Oslo Getis Ord cumulative neighbour weigths of 1. and 2.order ####
-# nb_oslo <- spdep::poly2nb(oslo_decile, queen = T)
-# nblags_oslo <- spdep::nblag(neighbours = nb_oslo, maxlag = 2)
-# 
-# nb_oslo_cumul <- spdep::nblag_cumul(nblags_oslo) # 1. and 2. order in the same list
-# #lw_oslo_cumul <- nb2listw(nb_oslo_cumul, style = "W", zero.policy = T)
-# 
-# keep_oslo <- !is.na(oslo_decile$mean_diversity) # NA is the same for all the factors
-# oslo_cumul <- oslo_decile[keep_oslo, ]
-# nb_sub_oslo <- subset(nb_oslo_cumul, keep_oslo)
-# lw_sub_oslo <- nb2listw(nb_sub_oslo, style = "W", zero.policy = T)
-# #
-# plot(st_geometry(oslo_decile), border = "lightgrey")
-# plot.nb(lw_idw_sub, st_geometry(oslo_decile), add = T)
-# 
-# # Lokal Gi kumulativt
-# oslo_decile_uNA$gi_div_z <- as.numeric(localG(oslo_decile_uNA$mean_diversity, lw_sub_oslo, zero.policy = TRUE))
-# oslo_decile_uNA$gi_div_z
-# 
-# oslo_decile_uNA$gi_attCh_z <- as.numeric(localG(oslo_decile_uNA$mean_attitude_change, lw_sub_oslo, zero.policy = TRUE))
-# oslo_decile_uNA$gi_attCh_z
-# 
-# oslo_decile_uNA$gi_thr_z <- as.numeric(localG(oslo_decile_uNA$mean_threats, lw_sub_oslo, zero.policy = TRUE))
-# oslo_decile_uNA$gi_thr_z
-# 
-# oslo_decile_uNA$gi_sDiff_z <- as.numeric(localG(oslo_decile_uNA$mean_social_difference, lw_sub_oslo, zero.policy = TRUE))
-# oslo_decile_uNA$gi_sDiff_z
-# 
-# oslo_decile_uNA$gi_cli_z <- as.numeric(localG(oslo_decile_uNA$mean_climate, lw_sub_oslo, zero.policy = TRUE))
-# oslo_decile_uNA$gi_cli_z
 #######
 oslo_decile <- oslo_decile %>% 
   left_join(oslo_decile_uNA %>% st_drop_geometry() %>% 
@@ -1086,14 +839,14 @@ oslo_tbl_gi <- color(oslo_tbl_gi,~ gi_sDiff_z <= -1.96, ~ gi_sDiff_z, color = "b
 oslo_tbl_gi <- color(oslo_tbl_gi,~ gi_cli_z >= 1.96, ~ gi_cli_z, color = "red")
 oslo_tbl_gi <- color(oslo_tbl_gi,~ gi_cli_z <= -1.96, ~ gi_cli_z, color = "blue")
 oslo_tbl_gi
-save_as_docx(oslo_tbl_gi, path = '/Users/eiraheleneberglemstad/Documents/NTNU/GEOG3900 MASTER/Figurer_fra_R/oslo_tbl_gi_2500.docx')
-# save_as_image(oslo_tbl_gi, path = '/Users/eiraheleneberglemstad/R_Projects/Master/PLOTS/Map_Oslo_Gi/oslo_tbl_gi_2500.png')
-save_as_image(oslo_tbl_gi, path = '/Users/eiraheleneberglemstad/R_Projects/Master/PLOTS/Map_Oslo_Gi/oslo_tbl_gi_5000.png')
-
+save_as_docx(oslo_tbl_gi, path = '/…/oslo_tbl_gi_2500.docx')
+# save_as_image(oslo_tbl_gi, path = '/…/PLOTS/Map_Oslo_Gi/oslo_tbl_gi_2500.png')
+# save_as_image(oslo_tbl_gi, path = '/…/PLOTS/Map_Oslo_Gi/oslo_tbl_gi_5000.png')
 
 
 # Oslo Visualisation of Getis Ord Results ####
-# Oslo attitudes toward immigrants ethnic diversity ######
+                       
+# Oslo attitudes toward immigrants ethnic diversity ####
 oslo_decile <- oslo_decile %>%
   mutate(
     gi_div_class = case_when(is.na(gi_div_z) ~ "No Data",
@@ -1125,17 +878,6 @@ map_oslo_gi_div <- ggplot(oslo_decile) +
   theme(legend.position = "right",
         plot.title = element_text(hjust = 0.5, size = 12),
         plot.caption = element_text(hjust = 0))
-  
-# map_oslo_div_gi_div <- map_oslo_div + map_oslo_gi_div + 
-#   plot_layout(guides = waiver)
-# map_oslo_div_gi_div
-# 
-# map_oslo_gi_div <- map_oslo_gi_div + 
-#   #plot_layout(guides = "collect") + 
-#   plot_annotation(#title = "Hotspots and Coldspots, Oslo",
-#                   caption = "Source: GeoNorge",
-#                   theme = theme(plot.title = element_text(hjust = 0.4),
-#                                 plot.caption = element_text(hjust = 0)))
 
 map_oslo_gi_div
 ggsave(map_oslo_gi_div, file = "PLOTS/Map_Oslo_Gi/map_oslo_gi_div_2500.png", dpi = 700)
@@ -1212,8 +954,6 @@ map_oslo_gi_thr <- ggplot(oslo_decile) +
 map_oslo_gi_thr
 ggsave(map_oslo_gi_thr, file = "PLOTS/Map_Oslo_Gi/map_oslo_gi_thr_2500.png", dpi = 700)
 
-
-
 # Oslo attitudes toward social difference #####
 oslo_decile <- oslo_decile %>%
   mutate(
@@ -1249,7 +989,7 @@ map_oslo_gi_sDiff <- ggplot(oslo_decile) +
 map_oslo_gi_sDiff
 ggsave(map_oslo_gi_sDiff, file = "PLOTS/Map_Oslo_Gi/map_oslo_gi_sDiff_2500.png", dpi = 600)
 
-
+                       
 # Oslo attitudes toward Climate Change Gi #####
 oslo_decile <- oslo_decile %>%
   mutate(
@@ -1286,10 +1026,9 @@ map_oslo_gi_cli
 ggsave(map_oslo_gi_cli, file = "PLOTS/Map_Oslo_Gi/map_oslo_gi_cli_2500.png", dpi = 600)
 
 
-
 ###### TRONDHEIM #####
-trondheim_geoJSON <- read_sf("/Users/eiraheleneberglemstad/R_Projects/Master/GeoJSON_postnummer/Basisdata_5001_Trondheim_25832_Postnummeromrader_GeoJSON.geojson")
-st_layers("/Users/eiraheleneberglemstad/R_Projects/Master/GeoJSON_postnummer/Basisdata_5001_Trondheim_25832_Postnummeromrader_GeoJSON.geojson")
+trondheim_geoJSON <- read_sf("/…/GeoJSON_postnummer/Basisdata_5001_Trondheim_25832_Postnummeromrader_GeoJSON.geojson")
+st_layers("/…/GeoJSON_postnummer/Basisdata_5001_Trondheim_25832_Postnummeromrader_GeoJSON.geojson")
 
 trondheim_geoJSON <- trondheim_geoJSON %>% 
   select(c(postnummer, poststed, kommune, geometry))
@@ -1298,17 +1037,15 @@ summary(trondheim_geoJSON$postnummer[duplicated(trondheim_geoJSON$postnummer)]) 
 data_trondheim <- data_hele %>% 
   filter(kommune==5001) 
 
-# 3) Left join mellom geodata og faktorer
+# Left join mellom geodata og faktorer
 trondheim_sum <- trondheim_geoJSON %>%
   left_join(data_trondheim, by = c("postnummer", "kommune"))
 
 
-# 4) Plot City areas -----
+# Plot City areas -----
 trondheim_sum_plot <- trondheim_sum
 class(trondheim_sum_plot$City_area)
 
-#trondheim_sum_plot$City_area <- as.factor(trondheim_sum_plot$City_area)
-# trondheim_sum_plot$City_part <- as.factor(trondheim_sum_plot$City_part)
 trondheim_sum_plot <- trondheim_sum_plot %>% 
   mutate(City_area =recode(as.factor(City_area),
                            "4" = "Central city areas",
@@ -1329,13 +1066,9 @@ trd_city_areas <- ggplot(trondheim_sum_plot) +
   scale_y_continuous(n.breaks = 6)
 
 trd_city_areas
-ggsave(trd_city_areas, file = "/Users/eiraheleneberglemstad/R_Projects/Master/PLOTS/Map_Trondheim/trd_city_areas.png")
+ggsave(trd_city_areas, file = "/…/PLOTS/Map_Trondheim/trd_city_areas.png")
 
 ##### Postnummer TRD #####
-# trondheim_sum <- trondheim_sum %>%
-#   mutate(
-#     postnummer = case_when(postnummer %in% c("7082", "7080") ~"7082_7080",
-#                                 TRUE ~ postnummer))
 
 trondheim_sum <- trondheim_sum %>%
   group_by(postnummer) %>%
@@ -1368,19 +1101,16 @@ data_trondheim <- trondheim_sum %>%
   
   
 trondheim_desil <- data_trondheim %>%
-  #left_join(data_trondheim, by = "postnummer") %>% 
   mutate(decile_diversity = factor(decile_diversity, levels = 1:10, ordered = T)) %>% 
   mutate(decile_att_change = factor(decile_att_change, levels = 1:10, ordered = T)) %>% 
   mutate(decile_threats = factor(decile_threats, levels = 1:10, ordered = T)) %>% 
   mutate(decile_social_diff = factor(decile_social_diff, levels = 1:10, ordered = T)) %>% 
   mutate(decile_climate = factor(decile_climate, levels = 1:10, ordered = T))
 
-#class(trondheim_desil)
 
 trondheim_desil_uNA <- trondheim_desil %>% 
   na.omit()
 
-#st_bbox(trondheim_desil_uNA$geometry)
 
 # Map Attitudes towards immigrants ethnic diversity ####
 map_trd_div <- ggplot(norge_desil) +
@@ -1405,26 +1135,6 @@ map_trd_div <- ggplot(norge_desil) +
   #theme(axis.text = element_text(angle = 45, hjust = 1))
 
 map_trd_div
-#st_bbox(trondheim_desil)
-
-# map_trd_div_inset <- ggplot(norge_desil) +
-#   geom_sf(aes(fill = decile_diversity), color = "grey10", linewidth = 0.03) +
-#   scale_fill_viridis_d(option = "cividis", 
-#                        na.value = "grey90", 
-#                        direction = -1) +
-#   guides(fill = guide_legend(reverse = T))+
-#   theme_void()+
-#   theme(legend.position = "none") + 
-#   coord_sf( xlim = c(265339.9, 273400.0),
-#             ylim = c(7030675.6, 7043009.4))+
-#   annotate(
-#     "label", x = -Inf, y = Inf,
-#     label = "Trondheim",
-#     hjust = -0.1, vjust = 1.1, 
-#     fill = "grey90", size = 2,)
-# map_trd_div_inset
-
-#ggsave(map_trd_div, file = "PLOTS/Map_Trondheim_Gi/map_trd_div.png", dpi = 500)
 
 # Map - attitude change among people around you in immigration questions the last 5 years #####
 
@@ -1475,7 +1185,7 @@ map_trd_threats <- ggplot(norge_desil) +
             ylim = c(7030675.6, 7043009.4))
 
 map_trd_threats
-#ggsave(map_trd_threats, file = "map_trd_threats.png", dpi = 500)
+
 
 # Map - attitudes towards social difference #####
 map_trd_sDiff <- ggplot(norge_desil) +
@@ -1499,7 +1209,7 @@ map_trd_sDiff <- ggplot(norge_desil) +
             ylim = c(7030675.6, 7043009.4))
 
 map_trd_sDiff
-#ggsave(map_trd_sDiff, file = "map_trd_sDiff.png", dpi = 500)
+
   
 # Map - attitudes towards climate change #####
 map_trd_climate <- ggplot(norge_desil) +
@@ -1523,16 +1233,6 @@ map_trd_climate <- ggplot(norge_desil) +
 map_trd_climate
 ggsave(map_trd_climate, file = "PLOTS/Map_Trondheim/map_trd_climate.png", dpi = 500)
 
-# Moran's I Trondheim #####
-  # use spdep package to test (global autocorrelation)
-  # spdep::moran, spdep::moran.test
-  # The zero.policy = TRUE allows zero-length weights vectors 
-
-#Basert på geo.hunter R spatial regression men fått hjelp til modifikasjoner av 
-  #Copilot pga manglende data i mitt datasett (ikke sammenhengende som i eks.)
-
-
-
 #####
 map_trd_immigration <- map_trd_div + map_trd_att_change+  
   plot_layout(guides = "collect") +
@@ -1555,13 +1255,11 @@ map_trd_thr_sDiff <- map_trd_threats + map_trd_sDiff +
 map_trd_thr_sDiff
 ggsave(map_trd_thr_sDiff, file = "PLOTS/Map_Trondheim/map_trd_thr_sDiff.png", dpi = 600)
 
-
 ## Trondheim neighbougweights IDW ####
 
 coords_trd <- st_coordinates(st_point_on_surface(trondheim_desil))
 
 #Inverted distance weights
-# dist_osl_list <- nbdists(neig_dist, coords_osl)
 
 keep_trd <- !is.na(trondheim_desil$mean_diversity) # NA is the same for all the factors
 trd_sub_dist <- trondheim_desil[keep_trd, ]
@@ -1585,23 +1283,7 @@ plot.nb(nb_sub_trd_dist, coords_trd_sub, add = T, col = "red")
 
 summary(unlist(dlist_sub))
 any(unlist(dlist_sub) == 0)
-# # Trd Local Gi - Hotspot analysis Getis Ord cumulative neighbour weigths of 1. and 2.order ####
-# nb_trd <- spdep::poly2nb(trondheim_desil, queen = T) # Naboskap 
-# nblags_trd <- spdep::nblag(neighbours = nb_trd, maxlag = 2)
-# 
-# nb_trd_cumul <- spdep::nblag_cumul(nblags_trd) # 1. and 2. order in the same list
-# lw_trd_cumul <- nb2listw(nb_trd_cumul, style = "W", zero.policy = T) 
-# 
-# # names(lw_trd_cumul)
-# 
-# keep_trd <- !is.na(trondheim_desil$mean_diversity) # NA in the same rows for all variables
-# trd_cumul <- trondheim_desil[keep_trd, ]
-# nb_sub_trd <- subset(nb_trd_cumul, keep_trd)
-# lw_sub_trd <- nb2listw(nb_sub_trd, style = "W", zero.policy = T)
-# plot(st_geometry(trondheim_desil), border = "lightgrey")
-# plot.nb(nb_trd_cumul, st_geometry(trondheim_desil), add = T)
-# 
-# 
+
 # Lokal Gi IDW
 trondheim_desil_uNA$gi_div_z <- as.numeric(localG_perm(trondheim_desil_uNA$mean_diversity, lw_idw_sub_trd, zero.policy = TRUE))
 trondheim_desil_uNA$gi_div_z
@@ -1650,7 +1332,7 @@ trd_tbl_gi <- color(trd_tbl_gi,~ gi_sDiff_z <= -1.96, ~ gi_sDiff_z, color = "blu
 trd_tbl_gi <- color(trd_tbl_gi,~ gi_cli_z >= 1.96, ~ gi_cli_z, color = "red")
 trd_tbl_gi <- color(trd_tbl_gi,~ gi_cli_z <= -1.96, ~ gi_cli_z, color = "blue")
 trd_tbl_gi
-save_as_docx(trd_tbl_gi, path = '/Users/eiraheleneberglemstad/Documents/NTNU/GEOG3900 MASTER/Figurer_fra_R/trd_tbl_gi_2900.docx')
+save_as_docx(trd_tbl_gi, path = '/…/trd_tbl_gi_2900.docx')
 
 
 ### TRD visual results local Gi Diversity #####
@@ -1684,15 +1366,10 @@ trd_plot_div <- ggplot(trondheim_desil) +
   theme_linedraw()+
   theme(legend.position = "right",
         plot.title = element_text(size = 12),
-        plot.caption = element_text(hjust = 0))+#,
-        # legend.background = 
-        #   element_rect(color = "black",
-        #                linewidth = 0.3))+
+        plot.caption = element_text(hjust = 0))+
   coord_sf( xlim = c(565634.9, 572160.5),
-            ylim = c(7023391.1, 7034921.0))#+
-  #theme(axis.text = element_text(angle = 45, hjust = 1))
+            ylim = c(7023391.1, 7034921.0))
   
-
 trd_plot_div
 
 ### TRD visual results local Gi Attitude change - Immigration #####
@@ -1846,27 +1523,6 @@ ggsave(trd_plot_sDiff, file = "PLOTS/Map_Trondheim_Gi/trd_plot_sDiff_2900.png", 
 trd_plot_cli
 ggsave(trd_plot_cli, file = "PLOTS/Map_Trondheim_Gi/trd_plot_cli_2900.png", dpi = 600)
 
-# map_trd_gi_div_cli <- trd_plot_div + trd_plot_cli + 
-#   plot_layout(guides = "collect") +
-#   plot_annotation(title = "Hotspots and Coldspots, Trondheim",
-#                   caption = "Source: GeoNorge",
-#                   theme = theme(plot.title = element_text(hjust = 0.5),
-#                                 plot.caption = element_text(hjust = 0)))
-#   map_trd_gi_div_cli
-# ggsave(map_trd_gi_div_cli, file = "map_trd_gi_div_cli.png", dpi = 800)
-# 
-# 
-# #
-# map_trd_gi_cli <- trd_plot_cli +
-# plot_annotation(title = "Clusters of Hotspots and Coldspots, Trondheim",
-#                 caption = "Source: GeoNorge",
-#                 theme = theme(plot.title = element_text(hjust = 0.5)))
-# map_trd_gi_cli
-# ggsave(map_trd_gi_cli, file = "map_trd_gi_cli.png", dpi = 500)
-
-
-
-
 ###### BERGEN #####
 
 bergen_geodata <- NOR_geo_uDup %>% 
@@ -1876,19 +1532,17 @@ data_bergen <- data_hele %>%
   filter(kommune==4601) 
 
 
-# 3) Left join mellom geodata og faktorer
+# Left join mellom geodata og faktorer
 data_bergen <- bergen_geodata %>%
   left_join(data_bergen, by = c("postnummer", "kommune"))
 
 data_bergen_uNA <- data_bergen %>% 
   na.omit()
-#st_bbox(data_bergen_uNA)
-# 4) Plot Bergen City area/part -----
+
+# Plot Bergen City area/part -----
 library(stringr)
 brg_sum_plot <- data_bergen
 class(brg_sum_plot$City_area)
-#brg_sum_plot$City_area <- as.factor(brg_sum_plot$City_area)
-# brg_sum_plot$City_part <- as.factor(brg_sum_plot$City_part)
 
 brg_sum_plot <- brg_sum_plot %>% 
   mutate(
@@ -1919,7 +1573,7 @@ brg_city_areas <- ggplot(brg_sum_plot) +
   scale_y_continuous(n.breaks = 5)
 
 brg_city_areas
-ggsave(brg_city_areas, file = "/Users/eiraheleneberglemstad/R_Projects/Master/PLOTS/Map_Bergen/brg_city_parts.png", dpi = 500)
+ggsave(brg_city_areas, file = "/…/PLOTS/Map_Bergen/brg_city_parts.png", dpi = 500)
 
 # Bergen postnummer -----
 bergen_postgrupper <- data_bergen %>% 
@@ -1958,7 +1612,6 @@ bergen_postgrupper <- bergen_postgrupper %>%
 
 bergen_postgrupper_uNA <- bergen_postgrupper %>% 
   na.omit()
-#st_bbox(bergen_postgrupper_uNA)
 
 ### Bergen deciles #####
 bergen_decile <- bergen_postgrupper %>% 
@@ -1998,31 +1651,10 @@ map_brg_div <- ggplot(bergen_NOR_inset) +
         plot.title = element_text(size = 12, color = "black"),
         plot.caption = element_text(hjust = 0))+
   coord_sf( xlim = c(-43941.12, -26797.03),
-            ylim = c(6712127.52, 6749240.28))#+
-  #theme(axis.text = element_text(angle = 45, hjust = 1))
+            ylim = c(6712127.52, 6749240.28))
 map_brg_div
 
 ggsave(map_brg_div, file = "PLOTS/Map_Bergen/map_brg_div.png", dpi = 500)
-
-# map_brg_div_inset <- ggplot(bergen_NOR_inset) +
-#   geom_sf(aes(fill = decile_diversity), color = "grey10", linewidth = 0.03) +
-#   scale_fill_viridis_d(option = "cividis", 
-#                        na.value = "grey90", 
-#                        direction = -1,
-#                        drop = F) +
-#   guides(fill = guide_legend(reverse = T))+
-#   theme_void()+
-#   theme(legend.position = "none")+
-#   coord_sf( xlim = c(-42041.12, -26100),
-#             ylim = c(6712127.52, 6750119.13))+
-#   annotate(
-#     "label", x = -Inf, y = Inf,
-#     label = "Bergen",
-#     hjust = -0.1, vjust = 1.1, 
-#     fill = "grey90", size = 2)
-# map_brg_div_inset 
-
-
 
 # Map - attitude change among people around you in immigration questions the last 5 years #####
 
@@ -2112,25 +1744,7 @@ map_brg_climate
 ggsave(map_brg_climate, file = "PLOTS/Map_Bergen/map_brg_climate.png", dpi = 500)
 
 
-
 # BRG Local analysis ####
-## BRG Getis Ord cumulative neighbour weights of 1. and 2.order ####
-# nb_brg <- spdep::poly2nb(bergen_decile, queen = T) # Naboskap 
-# nblags_brg <- spdep::nblag(neighbours = nb_brg, maxlag = 2) # OBS! PostC 5107 KOMMER IKKE MED!!
-# 
-# nb_brg_cumul <- spdep::nblag_cumul(nblags_brg) # 1. and 2. order in the same list
-# lw_brg_cumul <- nb2listw(nb_brg_cumul, style = "W", zero.policy = T) 
-# 
-# #names(lw_brg_cumul)
-#  
-# keep_brg <- !is.na(bergen_decile$mean_diversity) # NA in the same rows for all variables
-# brg_cumul <- bergen_decile[keep_brg, ] 
-# nb_sub_brg <- subset(nb_brg_cumul, keep_brg)
-# lw_sub_brg <- nb2listw(nb_sub_brg, style = "W", zero.policy = T)
-# 
-# plot(st_geometry(bergen_decile), border = "lightgrey")
-# plot.nb(nb_brg_cumul, st_geometry(bergen_decile), add = T)
-
 
 # BRG neighbougweights IDW ####
 
@@ -2207,10 +1821,8 @@ brg_tbl_gi <- color(brg_tbl_gi,~ gi_cli_z >= 1.96, ~ gi_cli_z, color = "red")
 brg_tbl_gi <- color(brg_tbl_gi,~ gi_cli_z <= -1.96, ~ gi_cli_z, color = "blue")
 
 brg_tbl_gi
-save_as_docx(brg_tbl_gi, path = '/Users/eiraheleneberglemstad/Documents/NTNU/GEOG3900 MASTER/Figurer_fra_R/brg_tbl_gi.docx')
+save_as_docx(brg_tbl_gi, path = '/…/brg_tbl_gi.docx')
 
-
-  
 ### BRG results local Gi Diversity #####
 bergen_decile <- bergen_decile %>%
   mutate(gi_div_class = case_when(is.na(gi_div_z)     ~ "No Data",
@@ -2237,9 +1849,6 @@ map_brg_gi_div <- ggplot(bergen_decile) +
        caption = "Source: GeoNorge")+
   theme_linedraw()+
   theme(legend.position = "right", 
-        # legend.background = 
-        #   element_rect(color = "black",
-        #                linewidth = 0.3),
         plot.title = element_text(size = 12),
         plot.caption = element_text(hjust = 0))
 map_brg_gi_div
@@ -2270,13 +1879,11 @@ map_brg_gi_attCh <- ggplot(bergen_decile) +
   theme_linedraw()+
   theme(plot.title = element_text(size = 12),
         plot.caption = element_text(hjust = 0),
-        legend.position = "right"#, 
-        # legend.background = 
-        #   element_rect(color = "black",
-        #                linewidth = 0.3)
+        legend.position = "right"
         )
 map_brg_gi_attCh
 ggsave(map_brg_gi_attCh, file="PLOTS/Map_Bergen_Gi/map_brg_gi_attCh_5000.png", dpi = 500)
+                           
 ### BRG results local Gi Threats #####
 bergen_decile <- bergen_decile %>%
   mutate(gi_thr_class = case_when(is.na(gi_thr_z)     ~ "No Data",
@@ -2310,6 +1917,7 @@ map_brg_gi_thr <- ggplot(bergen_decile) +
         plot.caption = element_text(hjust = 0))
 map_brg_gi_thr
 ggsave(map_brg_gi_thr, file="PLOTS/Map_Bergen_Gi/map_brg_gi_thr_5000.png", dpi = 500)
+                           
 ### BRG results local Gi Social Difference #####
 bergen_decile <- bergen_decile %>%
   mutate(gi_sDiff_class = case_when(is.na(gi_sDiff_z) ~ "No Data",
@@ -2336,9 +1944,7 @@ map_brg_gi_sDiff <- ggplot(bergen_decile) +
   theme(legend.position = "right",
         plot.title = element_text(size = 12),
         plot.caption = element_text(hjust = 0)) 
-        # legend.background = 
-        #   element_rect(color = "black",
-        #                linewidth = 0.3))
+     
 map_brg_gi_sDiff
 ggsave(map_brg_gi_sDiff, file = "PLOTS/Map_Bergen_Gi/map_brg_gi_sDiff_5000.png", dpi = 500)
 
@@ -2366,9 +1972,7 @@ map_brg_gi_cli <- ggplot(bergen_decile) +
        caption = "Source: GeoNorge") +
   theme_linedraw()+
   theme(legend.position = "right", 
-        # legend.background = 
-        #   element_rect(color = "black",
-        #                linewidth = 0.3),
+        
         plot.title = element_text(size = 12),
         plot.caption = element_text(hjust = 0))
 map_brg_gi_cli
@@ -2380,197 +1984,6 @@ map_brg_gi_attCh
 map_brg_gi_thr
 map_brg_gi_sDiff
 map_brg_gi_cli
-
-map_brg_divA <- map_brg_div + map_brg_gi_div
-map_brg_divA
-
-# map_brg_gi_div_att <- map_brg_gi_div + map_brg_gi_attCh+
-#   plot_layout(guides = "collect") + 
-#   plot_annotation(title = "Hotspots and Coldspots, Bergen",
-#                   caption = "Source: GeoNorge",
-#                   theme = theme(plot.title = element_text(hjust = 0.5),
-#                                 plot.caption = element_text(hjust = 0)))
-# map_brg_gi_div_att
-# ggsave(map_brg_gi_div_att, file = "map_brg_gi_div_att.png", dpi = 600)
-# 
-# ##
-# map_brg_gi_thr <- map_brg_gi_thr +
-#   plot_layout(guides = "collect") + 
-#   plot_annotation(title = "Hotspots and Coldspots, Bergen",
-#                   caption = "Source: GeoNorge",
-#                   theme = theme(plot.title = element_text(hjust = 0.5),
-#                                 plot.caption = element_text(hjust = 0)))
-# map_brg_gi_thr
-# ggsave(map_brg_gi_thr, file = "map_brg_gi_thr.png", dpi = 500)
-# ##
-# 
-# map_brg_gi_SDiff_Cli <- map_brg_gi_sDiff + map_brg_gi_cli + 
-#   plot_layout(guides = "collect") + 
-#   plot_annotation(title = "Hotspots and Coldspots, Bergen",
-#                   caption = "Source: GeoNorge",
-#                   theme = theme(plot.title = element_text(hjust = 0.5),
-#                                 plot.caption = element_text(hjust = 0)))
-# 
-# map_brg_gi_SDiff_Cli
-# ggsave(map_brg_gi_SDiff_Cli, file = "map_brg_gi_SDiff_Cli.png", dpi = 600)
-
-
-#######
-# # BRG attitudes toward immigrants ethnic diversity 
-# bergen_decile <- bergen_decile %>%
-#   mutate(
-#     gi_div_class = case_when(is.na(gi_div_z) ~ "No Data",
-#                              gi_div_z >=  1.96  ~ "Hotspot (>= 95%)", #1.96 er z-score med signifikansnivå 95%
-#                              gi_div_z <= -1.96  ~ "Coldspot (>= 95%)",
-#                              TRUE               ~ "Insignificant"),
-#     gi_div_class = factor(gi_div_class,
-#                           levels = c("Coldspot (>= 95%)",
-#                                      "Insignificant",
-#                                      "Hotspot (>= 95%)",
-#                                      "No Data")))
-# 
-# map_brg_gi_div <- ggplot(bergen_decile) +
-#   geom_sf(aes(fill = gi_div_class), color = "grey30", size = 0.02) +
-#   scale_fill_manual(
-#     values = c("Coldspot (>= 95%)"="royalblue4",
-#                "Insignificant" ="snow4",
-#                "Hotspot (>= 95%)" ="brown4",
-#                "No Data"       ="grey95"),
-#     name = "Local Gi") +
-#   labs(title = "Cluster of Hotspots and Coldspots in Bergen",
-#        subtitle ="Ethnic Diversity") +
-#   theme_minimal() +
-#   theme(legend.position = "right")
-# map_brg_gi_div
-# ggsave(map_brg_gi_div, file = "map_brg_gi_div.png", dpi = 500)
-# 
-# # BRG attitude change toward immigrants
-# bergen_decile <- bergen_decile %>%
-#   mutate(
-#     gi_attCh_class = case_when(is.na(gi_attCh_z) ~ "No Data",
-#                                gi_attCh_z >=  1.96  ~ "Hotspot (>= 95%)", #1.96 er z-score med signifikansnivå 95%
-#                                gi_attCh_z <= -1.96  ~ "Coldspot (>= 95%)",
-#                                TRUE               ~ "Insignificant"),
-#     gi_attCh_class = factor(gi_attCh_class,
-#                             levels = c("Coldspot (>= 95%)",
-#                                        "Insignificant",
-#                                        "Hotspot (>= 95%)",
-#                                        "No Data")))
-# 
-# map_brg_gi_attCh <- ggplot(bergen_decile) +
-#   geom_sf(aes(fill = gi_attCh_class), color = "grey30", size = 0.02) +
-#   scale_fill_manual(
-#     values = c("Coldspot (>= 95%)"="royalblue4",
-#                "Insignificant" ="snow4",
-#                "Hotspot (>= 95%)" ="brown4",
-#                "No Data"       ="grey95"),
-#     name = "Local Gi") +
-#   labs(title = "Cluster of Hotspots and Coldspots in Bergen",
-#        subtitle = "Attitude change") +
-#   theme_minimal() +
-#   theme(legend.position = "right")
-# 
-# map_brg_gi_attCh
-# ggsave(map_brg_gi_attCh, file = "map_brg_gi_attCh.png", dpi = 700)
-# 
-# "Hotspots and coldspots in Bergen"
-# # map_brg_gi_div_att <- map_brg_gi_div + map_brg_gi_attCh + 
-# #   plot_layout(guides = "collect") + 
-# #   plot_annotation(title = "Clusters of Hotspots and Coldspots in Bergen",
-# #                   theme = theme(plot.title = element_text(hjust = 0.5)))
-# # 
-# # map_brg_gi_div_att
-# #ggsave(map_brg_gi_div_att, file = "map_brg_gi_div_att.png", dpi = 700)
-
-
-# # BRG attitudes "immigrants are a threat to norwegian society"
-# bergen_decile <- bergen_decile %>%
-#   mutate(
-#     gi_thr_class = case_when(is.na(gi_thr_z) ~ "No Data",
-#                              gi_thr_z >=  1.96  ~ "Hotspot (>= 95%)", #1.96 er z-score med signifikansnivå 95%
-#                              gi_thr_z <= -1.96  ~ "Coldspot (>= 95%)",
-#                              TRUE               ~ "Insignificant"
-#     ),
-#     gi_thr_class = factor(gi_thr_class,
-#                           levels = c("Coldspot (>= 95%)",
-#                                      "Insignificant",
-#                                      "Hotspot (>= 95%)",
-#                                      "No Data")))
-# 
-# map_brg_gi_thr <- ggplot(bergen_decile) +
-#   geom_sf(aes(fill = gi_thr_class), size = 0.02) +
-#   scale_fill_manual(
-#     values = c("Coldspot (>= 95%)"="royalblue4",
-#                "Insignificant" ="snow4",
-#                "Hotspot (>= 95%)" ="brown4",
-#                "No Data"       ="grey95"),
-#     name = "Local Gi") +
-#   labs(title = "Cluster of Hotspots and Coldspots in Bergen",
-#        subtitle ="Immigrants as a threat") +
-#   theme_minimal() +
-#   theme(legend.position = "right")
-# map_brg_gi_thr
-# 
-# ggsave(map_brg_gi_thr, file = "map_brg_gi_thr.png", dpi = 500)
-# 
-# # BRG attitudes toward social difference
-# bergen_decile <- bergen_decile %>%
-#   mutate(
-#     gi_sDiff_class = case_when(is.na(gi_sDiff_z) ~ "No Data",
-#                                gi_sDiff_z >=  1.96  ~ "Hotspot (>= 95%)", #1.96 er z-score med signifikansnivå 95%
-#                                gi_sDiff_z <= -1.96  ~ "Coldspot (>= 95%)",
-#                                TRUE               ~ "Insignificant"),
-#     gi_sDiff_class = factor(gi_sDiff_class,
-#                             levels = c("Coldspot (>= 95%)",
-#                                        "Insignificant",
-#                                        "Hotspot (>= 95%)",
-#                                        "No Data")))
-# 
-# map_brg_gi_sDiff <- ggplot(bergen_decile) +
-#   geom_sf(aes(fill = gi_sDiff_class), color = "grey30", size = 0.02) +
-#   scale_fill_manual(
-#     values = c("Coldspot (>= 95%)"="royalblue4",
-#                "Insignificant" ="snow4",
-#                "Hotspot (>= 95%)" ="brown4",
-#                "No Data"       ="grey95"),
-#     name = "Local Gi") +
-#   labs(title = "Cluster of Hotspots and Coldspots in Bergen",
-#        subtitle ="Social Difference") +
-#   theme_minimal() +
-#   theme(legend.position = "right")
-# 
-# map_brg_gi_sDiff
-# ggsave(map_brg_gi_sDiff, file = "map_brg_gi_sDiff.png", dpi = 500)
-# 
-# # BRG attitudes toward Climate Change
-# bergen_decile <- bergen_decile %>%
-#   mutate(
-#     gi_cli_class = case_when(is.na(gi_cli_z) ~ "No Data",
-#                              gi_cli_z >=  1.96  ~ "Hotspot (>= 95%)", #1.96 er z-score med signifikansnivå 95%
-#                              gi_cli_z <= -1.96  ~ "Coldspot (>= 95%)",
-#                              TRUE               ~ "Insignificant"),
-#     gi_cli_class = factor(gi_cli_class,
-#                           levels = c("Coldspot (>= 95%)",
-#                                      "Insignificant",
-#                                      "Hotspot (>= 95%)",
-#                                      "No Data")))
-# 
-# map_brg_gi_cli <- ggplot(bergen_decile) +
-#   geom_sf(aes(fill = gi_cli_class), color = "grey30", size = 0.02) +
-#   scale_fill_manual(
-#     values = c("Coldspot (>= 95%)"="royalblue4",
-#                "Insignificant" ="snow4",
-#                "Hotspot (>= 95%)" ="brown4",
-#                "No Data"       ="grey95"),
-#     name = "Local Gi") +
-#   labs(title = "Cluster of Hotspots and Coldspots in Bergen",
-#        subtitle ="Climate Change") +
-#   theme_minimal() +
-#   theme(legend.position = "right")
-# 
-# map_brg_gi_cli
-# ggsave(map_brg_gi_cli, file = "map_brg_gi_cli.png", dpi = 500)
-
 
 
 #------------ FINAL PLOTS NORWAY --------
@@ -2595,12 +2008,6 @@ bbox_brg <- data.frame( xmin = -43941.12,
                         ymin = 6712127.52,
                         ymax = 6750119.13)
 
-
-#st_crs(trondheim_desil)
-#st_bbox(trondheim_desil)
-# trondheim_desil_33 <- st_transform(trondheim_desil, "+proj=utm +zone=33")
-# st_crs(trondheim_desil_33)
-# st_bbox(trondheim_desil_33)
 
 bbox_trd <- data.frame( xmin = 250339.9, 
                         xmax = 286481.0,
