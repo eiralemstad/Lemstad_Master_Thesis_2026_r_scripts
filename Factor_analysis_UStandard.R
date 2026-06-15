@@ -3,16 +3,14 @@ library(psych)
 library(gt)
 library(gtExtras)
 
-data2 <- read.csv("/Users/eiraheleneberglemstad/R_Projects/Master/Master_1.csv")
+data2 <- read.csv("…/Master_1.csv")
 
 sted <- data2 %>%
   select(record, age, gender, zipcode, fylke2024, kommune2024, landsdel2024,
          City_area, City_part, living_type, weight)
 
 ##### Polarisation Factor Analysis ####
-imputed <- read.csv("/Users/eiraheleneberglemstad/R_Projects/Master/data_imputated.csv")
-#
-
+imputed <- read.csv("…/data_imputated.csv")
 
 # Polariseringsmål - innvandring, klima og sosiale forskjeller. 
 pol_fac <- imputed %>% 
